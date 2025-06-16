@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const abi = require('C:/政大/資訊科技創新期末專案/Solidity/edu-support/out/FundraiserFactory.sol/FundraiserFactory.json').abi;
+const abi = require('C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/out/FundraiserFactory.sol/FundraiserFactory.json').abi;
 console.log("Contract ABI loaded successfully");
 
-const deployment = require('C:/政大/資訊科技創新期末專案/Solidity/edu-support/broadcast/FundraiserFactory.s.sol/31337/run-latest.json');
+const deployment = require('C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/broadcast/FundraiserFactory.s.sol/31337/run-latest.json');
 const address = deployment.transactions[0].contractAddress;
 console.log("Contract address:", address);
 
@@ -18,7 +18,7 @@ fs.writeFileSync(
   JSON.stringify({ address }, null, 2)
 );
 
-const abi2 = require('C:/政大/資訊科技創新期末專案/Solidity/edu-support/out/Fundraiser.sol/Fundraiser.json').abi;
+const abi2 = require('C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/out/Fundraiser.sol/Fundraiser.json').abi;
 console.log("Contract ABI loaded successfully");
 
 fs.writeFileSync(

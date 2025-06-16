@@ -149,6 +149,19 @@
   },
   {
     "type": "function",
+    "name": "targetAmount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "totalDonations",
     "inputs": [],
     "outputs": [

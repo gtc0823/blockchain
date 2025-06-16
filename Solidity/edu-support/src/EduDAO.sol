@@ -19,10 +19,18 @@ contract EduDAO {
         string description
     );
     event Voted(uint256 proposalId, address voter, bool inFavor, uint256 weight);
+    event ProposalExecuted(uint256 proposalId, address fundraiser, uint256 amount);
 
     // --- State Variables ---
     EduToken public immutable token;
     uint256 public nextProposalId;
+
+    enum ProposalState {
+        Pending,
+        Approved,
+        Rejected,
+        Executed
+    }
 
     struct Proposal {
         address proposer;
@@ -31,6 +39,8 @@ contract EduDAO {
         uint256 creationTime;
         uint256 forVotes;
         uint256 againstVotes;
+        uint256 votingEndTime;
+        ProposalState state;
         mapping(address => bool) hasVoted;
     }
 
@@ -46,8 +56,13 @@ contract EduDAO {
     }
 
     // --- Functions ---
-    constructor(address _tokenAddress) {
+    uint256 public constant VOTING_PERIOD = 7 days;
+    uint256 public constant VOTE_THRESHOLD = 100 * 10**18; // 100 tokens
+    address public treasury;
+
+    constructor(address _tokenAddress, address _treasury) {
         token = EduToken(_tokenAddress);
+        treasury = _treasury;
     }
 
     /**
@@ -70,6 +85,8 @@ contract EduDAO {
         p.fundraiserContract = _fundraiserContract;
         p.description = _description;
         p.creationTime = block.timestamp;
+        p.votingEndTime = block.timestamp + VOTING_PERIOD;
+        p.state = ProposalState.Pending;
         // forVotes and againstVotes are already 0 by default
 
         emit ProposalCreated(
@@ -90,6 +107,8 @@ contract EduDAO {
         proposalExists(_proposalId)
     {
         Proposal storage p = proposals[_proposalId];
+        require(p.state == ProposalState.Pending, "Voting period ended");
+        require(block.timestamp < p.votingEndTime, "Voting period ended");
         require(!p.hasVoted[msg.sender], "Already voted");
 
         uint256 votingPower = token.balanceOf(msg.sender);
@@ -105,4 +124,45 @@ contract EduDAO {
 
         emit Voted(_proposalId, msg.sender, _inFavor, votingPower);
     }
-} 
+
+    /**
+     * @notice Get the current state of a proposal
+     * @param _proposalId The ID of the proposal
+     * @return The current state of the proposal
+     */
+    function getProposalState(uint256 _proposalId) public view proposalExists(_proposalId) returns (ProposalState) {
+        return proposals[_proposalId].state;
+    }
+
+    /**
+     * @notice Get the voting power of an address for a specific proposal
+     * @param _proposalId The ID of the proposal
+     * @param _voter The address of the voter
+     * @return The voting power of the address
+     */
+    function getVotingPower(uint256 _proposalId, address _voter) public view proposalExists(_proposalId) returns (uint256) {
+        Proposal storage p = proposals[_proposalId];
+        require(block.timestamp < p.votingEndTime, "Voting period ended");
+        return token.balanceOf(_voter);
+    }
+
+    function executeProposal(uint256 _proposalId) public proposalExists(_proposalId) {
+        Proposal storage p = proposals[_proposalId];
+        require(p.state == ProposalState.Pending, "Proposal already executed");
+        require(block.timestamp >= p.votingEndTime, "Voting period not ended");
+
+        if (p.forVotes > p.againstVotes && p.forVotes >= VOTE_THRESHOLD) {
+            // Transfer funds from treasury to fundraiser
+            Fundraiser fundraiser = Fundraiser(payable(p.fundraiserContract));
+            uint256 amount = fundraiser.targetAmount();
+            require(
+                token.transferFrom(treasury, p.fundraiserContract, amount),
+                "Fund transfer failed"
+            );
+            p.state = ProposalState.Executed;
+            emit ProposalExecuted(_proposalId, p.fundraiserContract, amount);
+        } else {
+            p.state = ProposalState.Rejected;
+        }
+    }
+}

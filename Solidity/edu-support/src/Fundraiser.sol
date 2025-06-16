@@ -100,4 +100,14 @@ contract Fundraiser {
         myDonations[msg.sender] += msg.value;
         emit DonationReceived(msg.sender, msg.value);
     }
+
+    /**
+     * @notice Get the target amount for this fundraiser
+     * @dev This is a placeholder implementation. In a real scenario,
+     * this would return the actual target amount from storage.
+     * @return The target amount in wei
+     */
+    function targetAmount() public pure returns (uint256) {
+        return 10 ether; // Placeholder value
+    }
 }

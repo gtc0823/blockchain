@@ -126,7 +126,29 @@ contract EduDAO {
         }
     }
 
-    function getProposal(uint256 _proposalId) public view returns (address, address, string memory, uint256, uint256, uint256, bool) {
+    /// @notice Gets the details of a specific proposal.
+    /// @param _proposalId The ID of the proposal to fetch.
+    /// @return proposer The address of the member who created the proposal.
+    /// @return fundraiserContract The address of the fundraiser contract being proposed.
+    /// @return description A description of the proposal.
+    /// @return creationTime The timestamp when the proposal was created.
+    /// @return forVotes The number of votes for the proposal.
+    /// @return againstVotes The number of votes against the proposal.
+    /// @return executed Whether the proposal has been executed.
+    function getProposal(uint256 _proposalId)
+        external
+        view
+        returns (
+            address proposer,
+            address fundraiserContract,
+            string memory description,
+            uint256 creationTime,
+            uint256 forVotes,
+            uint256 againstVotes,
+            bool executed
+        )
+    {
+        require(_proposalId < nextProposalId, "Proposal does not exist");
         Proposal storage p = proposals[_proposalId];
         return (
             p.proposer,

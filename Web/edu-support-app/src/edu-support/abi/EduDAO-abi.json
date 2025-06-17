@@ -60,37 +60,37 @@
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "proposer",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "fundraiserContract",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "description",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "",
+        "name": "creationTime",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "forVotes",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "againstVotes",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "executed",
         "type": "bool",
         "internalType": "bool"
       }

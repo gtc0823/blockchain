@@ -32,6 +32,17 @@ contract EduDAO {
         Executed
     }
 
+    struct ProposalView {
+        address proposer;
+        address fundraiserContract;
+        string description;
+        uint256 creationTime;
+        uint256 forVotes;
+        uint256 againstVotes;
+        uint256 votingEndTime;
+        ProposalState state;
+    }
+
     struct Proposal {
         address proposer;
         address fundraiserContract; // The fundraiser being proposed for funding
@@ -144,6 +155,25 @@ contract EduDAO {
         Proposal storage p = proposals[_proposalId];
         require(block.timestamp < p.votingEndTime, "Voting period ended");
         return token.balanceOf(_voter);
+    }
+
+    /**
+     * @notice Get the full details of a proposal
+     * @param _proposalId The ID of the proposal
+     * @return A ProposalView struct containing the proposal details
+     */
+    function getProposal(uint256 _proposalId) public view proposalExists(_proposalId) returns (ProposalView memory) {
+        Proposal storage p = proposals[_proposalId];
+        return ProposalView({
+            proposer: p.proposer,
+            fundraiserContract: p.fundraiserContract,
+            description: p.description,
+            creationTime: p.creationTime,
+            forVotes: p.forVotes,
+            againstVotes: p.againstVotes,
+            votingEndTime: p.votingEndTime,
+            state: p.state
+        });
     }
 
     function executeProposal(uint256 _proposalId) public proposalExists(_proposalId) {

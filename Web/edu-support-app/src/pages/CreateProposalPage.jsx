@@ -75,12 +75,12 @@ const CreateProposalPage = () => {
         receipt.events.FundraiserCreated.returnValues.fundraiserAddress;
 
       // 3. 呼叫 EduDAO 建提案
-      await eduDaoContract.methods
+      const daoReceipt = await eduDaoContract.methods
         .createProposal(fundraiserAddress, proposal.description)
         .send({ from: walletAddress });
 
-      alert('Proposal and Fundraiser created successfully!');
-      // 重置表單或導頁可以這邊做
+      // 4. 跳轉到提案詳情頁面
+      window.location.href = `/proposal/${fundraiserAddress}`;
     } catch (error) {
       console.error('Error creating proposal:', error);
       alert('Error creating proposal. See console for details.');

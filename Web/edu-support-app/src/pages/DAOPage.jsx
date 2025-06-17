@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 
 import {
   Box, Container, Paper, Typography, Button, Grid, CircularProgress
@@ -92,7 +92,14 @@ const DAOPage = () => {
         {proposals.map((p) => (
           <Grid item xs={12} md={6} key={p.id}>
             <Paper elevation={3} sx={{ p: 3 }}>
-              <Typography variant="h6">Proposal #{p.id}</Typography>
+              <Typography 
+                variant="h6" 
+                component={Link} 
+                to={`/proposal/${p.fundraiser}`} 
+                sx={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+              >
+                Proposal #{p.id}
+              </Typography>
               <Typography>Proposer: {p.proposer}</Typography>
               <Typography>Description: {p.description}</Typography>
               <Typography>Fundraiser: {p.fundraiser}</Typography>

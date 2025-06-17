@@ -74,6 +74,67 @@
   },
   {
     "type": "function",
+    "name": "getProposal",
+    "inputs": [
+      {
+        "name": "_proposalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct EduDAO.ProposalView",
+        "components": [
+          {
+            "name": "proposer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "fundraiserContract",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "creationTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "forVotes",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "againstVotes",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "votingEndTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "state",
+            "type": "uint8",
+            "internalType": "enum EduDAO.ProposalState"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getProposalState",
     "inputs": [
       {

@@ -10,10 +10,13 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
 import { ETHEREUM_URL, fundraiserFactoryContractABI, fundraiserFactoryContractAddr } from './BrowseProposalsPage';
+import eduDaoContractABI from '../edu-support/abi/EduDAO-abi.json';
+import eduDaoContractAddr from '../edu-support/abi/EduDAO-addr.json';
 
 const CreateProposalPage = () => {
   const { walletAddress } = useOutletContext();
-  const [contract, setContract] = useState(null);
+  const [factoryContract, setFactoryContract] = useState(null);
+  const [eduDaoContract, setEduDaoContract] = useState(null);
 
   const [proposal, setProposal] = useState({
     name: '',
@@ -26,12 +29,20 @@ const CreateProposalPage = () => {
   useEffect(() => {
     if (walletAddress) {
       const web3 = new Web3(ETHEREUM_URL);
+
       const factoryInstance = new web3.eth.Contract(
         fundraiserFactoryContractABI,
         fundraiserFactoryContractAddr.address
       );
-      setContract(factoryInstance);
-      setProposal(prev => ({ ...prev, beneficiary: walletAddress }));
+      setFactoryContract(factoryInstance);
+
+      const eduDaoInstance = new web3.eth.Contract(
+        eduDaoContractABI,
+        eduDaoContractAddr.address
+      );
+      setEduDaoContract(eduDaoInstance);
+
+      setProposal((prev) => ({ ...prev, beneficiary: walletAddress }));
     }
   }, [walletAddress]);
 
@@ -41,22 +52,37 @@ const CreateProposalPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!contract || !walletAddress) {
+    if (!factoryContract || !eduDaoContract || !walletAddress) {
       alert('Please connect your wallet first.');
       return;
     }
-    try {
-      await contract.methods.createFundraiser(
-        proposal.name,
-        proposal.url,
-        proposal.imageURL,
-        proposal.description,
-        proposal.beneficiary
-      ).send({ from: walletAddress });
 
-      alert('Proposal created successfully!');
+    try {
+      // 1. 先用 Factory 建募款專案
+      const receipt = await factoryContract.methods
+        .createFundraiser(
+          proposal.name,
+          proposal.url,
+          proposal.imageURL,
+          proposal.description,
+          proposal.beneficiary
+        )
+        .send({ from: walletAddress });
+
+      // 2. 從事件抓新募款合約地址
+      // 事件名稱跟參數依你 Factory 合約事件定義改
+      const fundraiserAddress =
+        receipt.events.FundraiserCreated.returnValues.fundraiserAddress;
+
+      // 3. 呼叫 EduDAO 建提案
+      await eduDaoContract.methods
+        .createProposal(fundraiserAddress, proposal.description)
+        .send({ from: walletAddress });
+
+      alert('Proposal and Fundraiser created successfully!');
+      // 重置表單或導頁可以這邊做
     } catch (error) {
-      console.error('Failed to create proposal:', error);
+      console.error('Error creating proposal:', error);
       alert('Error creating proposal. See console for details.');
     }
   };
@@ -86,7 +112,7 @@ const CreateProposalPage = () => {
               onChange={handleChange}
               required
             />
-             <TextField
+            <TextField
               label="Cover Image URL"
               name="imageURL"
               value={proposal.imageURL}
@@ -124,4 +150,4 @@ const CreateProposalPage = () => {
   );
 };
 
-export default CreateProposalPage; 
+export default CreateProposalPage;

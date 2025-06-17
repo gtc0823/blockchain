@@ -12,6 +12,8 @@ import Link from '@mui/material/Link';
 
 import { ETHEREUM_URL } from './BrowseProposalsPage';
 import fundraiserContractABI from '../edu-support/abi/Fundraiser-abi.json';
+import eduDaoContractABI from '../edu-support/abi/EduDAO-abi.json';
+import eduDaoContractAddr from '../edu-support/abi/EduDAO-addr.json';
 
 const ProposalDetailPage = () => {
   const { contractAddress } = useParams();
@@ -28,23 +30,23 @@ const ProposalDetailPage = () => {
         const contract = new web3.eth.Contract(fundraiserContractABI, contractAddress);
 
         const [
-            name,
-            url,
-            imageURL,
-            description,
-            beneficiary,
-            totalDonations,
-            owner
+          name,
+          url,
+          imageURL,
+          description,
+          beneficiary,
+          totalDonations,
+          owner
         ] = await Promise.all([
-            contract.methods.name().call(),
-            contract.methods.url().call(),
-            contract.methods.imageURL().call(),
-            contract.methods.description().call(),
-            contract.methods.beneficiary().call(),
-            contract.methods.totalDonations().call(),
-            contract.methods.owner().call()
+          contract.methods.name().call(),
+          contract.methods.url().call(),
+          contract.methods.imageURL().call(),
+          contract.methods.description().call(),
+          contract.methods.beneficiary().call(),
+          contract.methods.totalDonations().call(),
+          contract.methods.owner().call()
         ]);
-        
+
         const totalDonationsEth = web3.utils.fromWei(totalDonations, 'ether');
 
         setFundDetails({
@@ -65,6 +67,18 @@ const ProposalDetailPage = () => {
 
     fetchDetails();
   }, [contractAddress]);
+
+  const submitToDAO = async () => {
+    try {
+      const web3 = new Web3(ETHEREUM_URL);
+      const dao = new web3.eth.Contract(eduDaoContractABI, eduDaoContractAddr.address);
+      await dao.methods.createProposal(contractAddress, fundDetails.description).send({ from: walletAddress });
+      alert('Proposal submitted to DAO!');
+    } catch (error) {
+      console.error('Submit to DAO failed:', error);
+      alert('Failed to submit to DAO.');
+    }
+  };
 
   if (loading) {
     return (
@@ -91,9 +105,9 @@ const ProposalDetailPage = () => {
           {fundDetails.name}
         </Typography>
         <Box sx={{ my: 3 }}>
-          <img 
-            src={fundDetails.imageURL || 'https://via.placeholder.com/800x400?text=EduDAO'} 
-            alt={fundDetails.name} 
+          <img
+            src={fundDetails.imageURL || 'https://via.placeholder.com/800x400?text=EduDAO'}
+            alt={fundDetails.name}
             style={{ width: '100%', maxHeight: '400px', objectFit: 'cover', borderRadius: '8px' }}
           />
         </Box>
@@ -115,12 +129,17 @@ const ProposalDetailPage = () => {
         <Link href={fundDetails.url} target="_blank" rel="noopener" sx={{ my: 2, display: 'block' }}>
           Visit Learning Resource
         </Link>
-        <Button variant="contained" size="large">
-          Donate to this Proposal
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+          <Button variant="contained" size="large">
+            Donate to this Proposal
+          </Button>
+          <Button variant="outlined" onClick={submitToDAO} disabled={!walletAddress}>
+            Submit to DAO
+          </Button>
+        </Box>
       </Paper>
     </Container>
   );
 };
 
-export default ProposalDetailPage; 
+export default ProposalDetailPage;

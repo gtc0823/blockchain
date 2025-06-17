@@ -6,6 +6,7 @@ import MainLayout from './layouts/MainLayout';
 import BrowseProposalsPage from './pages/BrowseProposalsPage';
 import CreateProposalPage from './pages/CreateProposalPage';
 import DAOPage from './pages/DAOPage';
+import ProposalDetailPage from './pages/ProposalDetailPage';  // 新增引入
 import PageReceipts from './edu-support/Receipts';
 
 function App() {
@@ -68,6 +69,10 @@ function App() {
         <Route path="/" element={<BrowseProposalsPage />} />
         <Route path="/create-proposal" element={<CreateProposalPage />} />
         <Route path="/dao" element={<DAOPage />} />
+        <Route
+          path="/proposal/:contractAddress"
+          element={<ProposalDetailPage />}
+        />
         <Route path="/edu-support/receipts" element={<PageReceipts />} />
       </Route>
     </Routes>

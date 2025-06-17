@@ -19,6 +19,30 @@
   },
   {
     "type": "function",
+    "name": "checkIfVoted",
+    "inputs": [
+      {
+        "name": "_proposalId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_voter",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "createProposal",
     "inputs": [
       {

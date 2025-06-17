@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import CardActions from '@mui/material/CardActions';
 
 // ABI and Address Imports
 import EduDAOABI from '../edu-support/abi/EduDAO-abi.json';
@@ -29,12 +30,14 @@ const DAOPage = () => {
     const [fundraiserAddress, setFundraiserAddress] = useState('');
     const [description, setDescription] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [votingStatus, setVotingStatus] = useState({}); // To track voting per proposal
+    const [executeStatus, setExecuteStatus] = useState({}); // To track execution per proposal
 
     // Define the correct chain ID for the Anvil local network
     const ANVIL_CHAIN_ID = 31337;
 
-    const fetchProposals = useCallback(async (contract) => {
-        if (!contract) return;
+    const fetchProposals = useCallback(async (contract, userAccount) => {
+        if (!contract || !userAccount) return;
         setLoading(true);
         setError('');
         try {
@@ -48,7 +51,20 @@ const DAOPage = () => {
 
             for (let i = 0; i < proposalCountNum; i++) {
                 console.log(`Fetching proposal with ID: ${i}`);
-                const p = await contract.getProposal(i);
+                let p, hasVoted = false; // Default to false
+
+                try {
+                    p = await contract.getProposal(i);
+                    // Only check vote status if proposal was fetched successfully
+                    if (p) {
+                      hasVoted = await contract.checkIfVoted(i, userAccount);
+                    }
+                } catch (e) {
+                    console.error(`Failed to fetch details for proposal #${i}:`, e);
+                    // If fetching fails, skip this proposal and continue the loop
+                    continue; 
+                }
+
                 console.log(`Received proposal data for ID ${i}:`, p);
 
                 // Map the array values to an object, handling BigInt for numeric values
@@ -61,6 +77,7 @@ const DAOPage = () => {
                     forVotes: p[4].toString(),
                     againstVotes: p[5].toString(),
                     executed: p[6],
+                    hasVoted: hasVoted, // Add hasVoted status
                 });
             }
             setProposals(fetchedProposals.reverse()); // Show newest first
@@ -109,8 +126,8 @@ const DAOPage = () => {
             const memberStatus = await contract.isMember(userAccount);
             setIsMember(memberStatus);
 
-            // Fetch proposals after a successful connection
-            await fetchProposals(contract);
+            // Fetch proposals after a successful connection, passing the account directly
+            await fetchProposals(contract, userAccount);
 
         } catch (err) {
             console.error(err);
@@ -168,12 +185,47 @@ const DAOPage = () => {
             // Reset form and refetch proposals
             setFundraiserAddress('');
             setDescription('');
-            await fetchProposals(daoContract);
+            await fetchProposals(daoContract, account);
         } catch (err) {
             console.error("Failed to create proposal:", err);
             setError(err.reason || "An error occurred while creating the proposal.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleVote = async (proposalId, voteType) => {
+        if (!daoContract) return;
+        setVotingStatus(prev => ({ ...prev, [proposalId]: true }));
+        setError('');
+        try {
+            // voteType should be 0 for For, 1 for Against
+            const tx = await daoContract.vote(proposalId, voteType);
+            await tx.wait();
+            // Refetch proposals to update vote counts and status
+            await fetchProposals(daoContract, account);
+        } catch (err) {
+            console.error(`Failed to vote on proposal ${proposalId}:`, err);
+            setError(err.reason || `An error occurred while voting on proposal #${proposalId}.`);
+        } finally {
+            setVotingStatus(prev => ({ ...prev, [proposalId]: false }));
+        }
+    };
+
+    const handleExecuteProposal = async (proposalId) => {
+        if (!daoContract) return;
+        setExecuteStatus(prev => ({ ...prev, [proposalId]: true }));
+        setError('');
+        try {
+            const tx = await daoContract.executeProposal(proposalId);
+            await tx.wait();
+            // Refetch proposals to update status
+            await fetchProposals(daoContract, account);
+        } catch (err) {
+            console.error(`Failed to execute proposal ${proposalId}:`, err);
+            setError(err.reason || `An error occurred while executing proposal #${proposalId}.`);
+        } finally {
+            setExecuteStatus(prev => ({ ...prev, [proposalId]: false }));
         }
     };
 
@@ -244,8 +296,8 @@ const DAOPage = () => {
             <Grid container spacing={4}>
                 {proposals.map((p) => (
                     <Grid item xs={12} md={6} lg={4} key={p.id}>
-                        <Card>
-                            <CardContent>
+                        <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            <CardContent sx={{ flexGrow: 1 }}>
                                 <Typography variant="h6" component="div">
                                     Proposal #{p.id}
                                 </Typography>
@@ -272,6 +324,36 @@ const DAOPage = () => {
                                 </Typography>
                                 {/* Voting and Execute buttons will be added in the next step */}
                             </CardContent>
+                            {isMember && (
+                                <CardActions sx={{ display: 'flex', justifyContent: 'space-around', p: 2 }}>
+                                    <Button 
+                                        size="small" 
+                                        variant="outlined"
+                                        onClick={() => handleVote(p.id, true)} // Pass boolean true for FOR
+                                        disabled={p.executed || p.hasVoted || votingStatus[p.id]}
+                                    >
+                                        {votingStatus[p.id] ? <CircularProgress size={20} /> : "Vote For"}
+                                    </Button>
+                                    <Button 
+                                        size="small" 
+                                        variant="outlined" 
+                                        color="secondary"
+                                        onClick={() => handleVote(p.id, false)} // Pass boolean false for AGAINST
+                                        disabled={p.executed || p.hasVoted || votingStatus[p.id]}
+                                    >
+                                        {votingStatus[p.id] ? <CircularProgress size={20} /> : "Vote Against"}
+                                    </Button>
+                                    <Button 
+                                        size="small" 
+                                        variant="contained" 
+                                        color="primary"
+                                        onClick={() => handleExecuteProposal(p.id)}
+                                        disabled={p.executed || executeStatus[p.id]}
+                                    >
+                                        {executeStatus[p.id] ? <CircularProgress size={20} /> : "Execute"}
+                                    </Button>
+                                </CardActions>
+                            )}
                         </Card>
                     </Grid>
                 ))}

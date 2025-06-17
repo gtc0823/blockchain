@@ -22,6 +22,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Icon for copy button
 import TextField from '@mui/material/TextField'; // Added missing import
+import VerifiedIcon from '@mui/icons-material/Verified';
 
 import { RouterLink } from '/src/components/router-link';
 
@@ -33,6 +34,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
   const [contract, setContract] = useState(null);
   const [newFundBeneficiary, setNewFundBeneficiary] = useState('');
   const [copyTooltipOpen, setCopyTooltipOpen] = useState(false); // State for copy tooltip
+  const [isDAOApproved, setIsDAOApproved] = useState(false); // State for DAO approval status
 
   // Contract metadata and donation state
   const [contractData, setContractData] = useState({
@@ -44,8 +46,8 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
     fundTotalDonationsWei: 0n, // Use BigInt for ethers v6
   });
 
+  const [myTotalDonation, setMyTotalDonation] = useState(0n);
   const [totalDonations, setTotalDonations] = useState(0);
-  const [userDonations, setUserDonations] = useState({ values: [], dates: [] });
   const [donationAmount, setDonationAmount] = useState('');
   const [exchangeRate, setExchangeRate] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
@@ -80,6 +82,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
         fundDescription,
         fundBeneficiary,
         fundTotalDonationsWei,
+        daoApprovalStatus,
       ] = await Promise.all([
         fundraiserContract.name(),
         fundraiserContract.url(),
@@ -87,6 +90,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
         fundraiserContract.description(),
         fundraiserContract.beneficiary(),
         fundraiserContract.totalDonations(),
+        fundraiserContract.isDAOApproved(),
       ]);
 
       setContractData({
@@ -97,6 +101,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
         fundBeneficiary,
         fundTotalDonationsWei,
       });
+      setIsDAOApproved(daoApprovalStatus);
 
       try {
         const prices = await cc.price('ETH', ['USD']); // Fetch the current exchange rate of ETH to USD
@@ -109,11 +114,9 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
       }
 
       if (connectedAccount) {
-        const userDonationsData = await fundraiserContract.myDonations();
-        setUserDonations({
-            values: userDonationsData[0], // Assuming values are the first element
-            dates: userDonationsData[1]  // Assuming dates are the second
-        });
+        // Correctly fetch the total donation for the connected account
+        const myDonationWei = await fundraiserContract.myDonations(connectedAccount);
+        setMyTotalDonation(myDonationWei);
 
         const owner = await fundraiserContract.owner();
         setIsOwner(owner.toLowerCase() === connectedAccount.toLowerCase());
@@ -185,24 +188,19 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
   };
 
   // Render list of user's past donations
-  const renderDonationsList = () => {
-    if (!userDonations?.values?.length || !userDonations?.dates?.length) {
-      return <p>No donations yet from you.</p>;
+  const renderMyDonation = () => {
+    if (!connectedAccount || !exchangeRate || myTotalDonation === 0n) {
+      return null;
     }
 
-    return userDonations.values.map((value, i) => {
-      // Use ethers.formatEther for BigInt
-      const eth = ethers.formatEther(value);
-      const usd = (exchangeRate * eth).toFixed(2);
-      const date = new Date(Number(userDonations.dates[i]) * 1000).toLocaleDateString();
-      return (
-        <div key={i}>
-          <Typography variant="body2" color="text.secondary">
-            On {date}, you donated ${usd}
-          </Typography>
-        </div>
-      );
-    });
+    const eth = ethers.formatEther(myTotalDonation);
+    const usd = (exchangeRate * eth).toFixed(2);
+    
+    return (
+      <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+        You have donated a total of ${usd} to this project. Thank you!
+      </Typography>
+    );
   };
 
   const handleCopy = () => {
@@ -229,7 +227,8 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
               />
               <Typography variant="caption">~{ethAmount} ETH</Typography>
             </FormControl>
-             {isOwner && (
+            {renderMyDonation()}
+            {isOwner && (
               <Box mt={2}>
                 <Typography variant="h6">Admin Controls</Typography>
                 <Button onClick={withdrawFunds} variant="contained" color="secondary" fullWidth>
@@ -263,17 +262,24 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
           alt={contractData.fundName}
         />
         <CardContent sx={{ flexGrow: 1 }}>
-          <Typography gutterBottom variant="h5" component="h2">
-            <Link
-              href={contractData.fundURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              underline="none"
-              color="inherit"
-            >
-              {contractData.fundName}
-            </Link>
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography gutterBottom variant="h5" component="div">
+              <Link
+                href={contractData.fundURL}
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="hover"
+                color="inherit"
+              >
+                {contractData.fundName}
+              </Link>
+            </Typography>
+            {isDAOApproved && (
+              <Tooltip title="DAO Approved">
+                <VerifiedIcon color="success" />
+              </Tooltip>
+            )}
+          </Box>
           <Typography variant="body2" color="text.secondary">
             {contractData.fundDescription}
           </Typography>

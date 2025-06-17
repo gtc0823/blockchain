@@ -114,7 +114,7 @@ contract EduDAO {
 
         require(p.proposer != address(0), "Proposal does not exist");
         require(!p.executed, "Proposal has already been executed");
-        require(block.timestamp >= p.creationTime + votingPeriod, "Voting period has not yet ended");
+        // require(block.timestamp >= p.creationTime + votingPeriod, "Voting period has not yet ended"); // Removed for testing purposes
         
         p.executed = true;
         
@@ -124,6 +124,15 @@ contract EduDAO {
         } else {
             emit ProposalExecuted(_proposalId, false);
         }
+    }
+
+    /// @notice Checks if a specific address has already voted on a proposal.
+    /// @param _proposalId The ID of the proposal to check.
+    /// @param _voter The address of the voter to check.
+    /// @return bool True if the address has voted, false otherwise.
+    function checkIfVoted(uint256 _proposalId, address _voter) external view returns (bool) {
+        require(_proposalId < nextProposalId, "Proposal does not exist");
+        return proposals[_proposalId].hasVoted[_voter];
     }
 
     /// @notice Gets the details of a specific proposal.

@@ -1,6 +1,6 @@
 // FundraiserCard.jsx - Displays a fundraising campaign card with donation, withdrawal, and beneficiary features
 
-import Web3 from 'web3';
+import { ethers } from 'ethers'; // Use ethers instead of Web3
 import cc from 'cryptocompare';
 import { useState, useEffect } from 'react';
 
@@ -11,6 +11,8 @@ import Stack from '@mui/material/Stack';
 import Input from '@mui/material/Input';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
+import Tooltip from '@mui/material/Tooltip'; // For copy feedback
+import IconButton from '@mui/material/IconButton'; // For copy button
 import CardMedia from '@mui/material/CardMedia';
 import Typography from '@mui/material/Typography';
 import CardContent from '@mui/material/CardContent';
@@ -18,17 +20,19 @@ import FormControl from '@mui/material/FormControl';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Icon for copy button
+import TextField from '@mui/material/TextField'; // Added missing import
 
 import { RouterLink } from '/src/components/router-link';
 
 import { ETHEREUM_URL } from '../pages/BrowseProposalsPage'; // Adjusted Path
 import fundraiserContractABI from '../edu-support/abi/Fundraiser-abi.json'; // Adjusted Path
 
-const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connectedAccount to props
-  // State variables for Web3, accounts, contract instance, UI control, and contract data
-  const [web3, setWeb3] = useState(null);
+const FundraiserCard = ({ fundraiser, connectedAccount }) => {
+  // State variables for ethers, contract instance, UI control, and contract data
   const [contract, setContract] = useState(null);
   const [newFundBeneficiary, setNewFundBeneficiary] = useState('');
+  const [copyTooltipOpen, setCopyTooltipOpen] = useState(false); // State for copy tooltip
 
   // Contract metadata and donation state
   const [contractData, setContractData] = useState({
@@ -37,7 +41,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
     fundImageURL: '',
     fundDescription: '',
     fundBeneficiary: '',
-    fundTotalDonationsWei: '',
+    fundTotalDonationsWei: 0n, // Use BigInt for ethers v6
   });
 
   const [totalDonations, setTotalDonations] = useState(0);
@@ -52,19 +56,20 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
 
   const init = async () => {
     try {
-      let web3Instance;
+      let provider;
+      let signer;
       
-      // Use connected wallet if available, otherwise fallback to public provider
-      if (window.ethereum) {
-        web3Instance = new Web3(window.ethereum);
+      if (window.ethereum && connectedAccount) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
       } else {
-        console.warn('MetaMask not detected. Using fallback provider.');
-        web3Instance = new Web3(ETHEREUM_URL);
+        console.warn('MetaMask not detected or not connected. Using fallback provider for read-only data.');
+        provider = new ethers.JsonRpcProvider(ETHEREUM_URL);
+        signer = provider; // Use provider for read-only calls
       }
 
-      const fundraiserContract = new web3Instance.eth.Contract(fundraiserContractABI, fundraiser);
+      const fundraiserContract = new ethers.Contract(fundraiser, fundraiserContractABI, signer);
 
-      setWeb3(web3Instance);
       setContract(fundraiserContract);
 
       // Load contract metadata
@@ -76,12 +81,12 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
         fundBeneficiary,
         fundTotalDonationsWei,
       ] = await Promise.all([
-        fundraiserContract.methods.name().call(),
-        fundraiserContract.methods.url().call(),
-        fundraiserContract.methods.imageURL().call(),
-        fundraiserContract.methods.description().call(),
-        fundraiserContract.methods.beneficiary().call(),
-        fundraiserContract.methods.totalDonations().call(),
+        fundraiserContract.name(),
+        fundraiserContract.url(),
+        fundraiserContract.imageURL(),
+        fundraiserContract.description(),
+        fundraiserContract.beneficiary(),
+        fundraiserContract.totalDonations(),
       ]);
 
       setContractData({
@@ -96,19 +101,21 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
       try {
         const prices = await cc.price('ETH', ['USD']); // Fetch the current exchange rate of ETH to USD
         setExchangeRate(prices.USD);
-        const eth = web3Instance.utils.fromWei(fundTotalDonationsWei, 'ether');
+        // Use ethers.formatEther for BigInt
+        const eth = ethers.formatEther(fundTotalDonationsWei);
         setTotalDonations((prices.USD * eth).toFixed(2));
       } catch (error) {
         console.error('Exchange rate fetch error:', error);
       }
 
       if (connectedAccount) {
-        const userDonationsData = await fundraiserContract.methods
-          .myDonations()
-          .call({ from: connectedAccount });
-        setUserDonations(userDonationsData);
+        const userDonationsData = await fundraiserContract.myDonations();
+        setUserDonations({
+            values: userDonationsData[0], // Assuming values are the first element
+            dates: userDonationsData[1]  // Assuming dates are the second
+        });
 
-        const owner = await fundraiserContract.methods.owner().call();
+        const owner = await fundraiserContract.owner();
         setIsOwner(owner.toLowerCase() === connectedAccount.toLowerCase());
       }
     } catch (error) {
@@ -128,53 +135,52 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
 
   // Handle donation transaction
   const donateFunds = async () => {
-    if (!connectedAccount) {
+    if (!contract || !connectedAccount) {
       alert("Please connect your wallet to donate.");
       return;
     }
     try {
       const ethTotal = parseFloat(donationAmount) / exchangeRate;
-      const donation = web3.utils.toWei(ethTotal.toString(), 'ether');
+      // Use ethers.parseEther for BigInt conversion
+      const donation = ethers.parseEther(ethTotal.toString());
 
-      const gasEstimate = await contract.methods
-        .donate()
-        .estimateGas({ from: connectedAccount, value: donation })
-        .catch(() => 650000);
+      const tx = await contract.donate({ value: donation });
+      await tx.wait(); // Wait for transaction to be mined
 
-      await contract.methods
-        .donate()
-        .send({ from: connectedAccount, value: donation, gas: gasEstimate });
       alert('Donation successful');
       setOpen(false);
       init(); // Refresh data after donation
     } catch (error) {
       console.error('Donation failed:', error);
-      alert('Donation failed');
+      alert(error.reason || 'Donation failed');
     }
   };
 
   // Handle owner withdrawal
   const withdrawFunds = async () => {
     try {
-      await contract.methods.withdraw().send({ from: connectedAccount });
+      const tx = await contract.withdraw();
+      await tx.wait();
       alert('Withdrawal successful');
       setOpen(false);
       init(); // Refresh data after withdrawal
     } catch (error) {
       console.error('Withdrawal failed:', error);
-      alert('Withdrawal failed');
+      alert(error.reason || 'Withdrawal failed');
     }
   };
 
   // Owner sets new beneficiary address
   const setBeneficiary = async () => {
     try {
-      await contract.methods.setBeneficiary(newFundBeneficiary).send({ from: connectedAccount });
+      const tx = await contract.setBeneficiary(newFundBeneficiary);
+      await tx.wait();
       alert('Beneficiary updated');
       setOpen(false);
+      init();
     } catch (error) {
       console.error('Set beneficiary failed:', error);
-      alert('Set beneficiary failed');
+      alert(error.reason || 'Set beneficiary failed');
     }
   };
 
@@ -185,9 +191,10 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
     }
 
     return userDonations.values.map((value, i) => {
-      const eth = web3.utils.fromWei(value, 'ether');
+      // Use ethers.formatEther for BigInt
+      const eth = ethers.formatEther(value);
       const usd = (exchangeRate * eth).toFixed(2);
-      const date = new Date(userDonations.dates[i] * 1000).toLocaleDateString();
+      const date = new Date(Number(userDonations.dates[i]) * 1000).toLocaleDateString();
       return (
         <div key={i}>
           <Typography variant="body2" color="text.secondary">
@@ -196,6 +203,12 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
         </div>
       );
     });
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(fundraiser);
+    setCopyTooltipOpen(true);
+    setTimeout(() => setCopyTooltipOpen(false), 2000); // Hide tooltip after 2 seconds
   };
 
   // Main render output
@@ -250,26 +263,50 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => { // Added connecte
           alt={contractData.fundName}
         />
         <CardContent sx={{ flexGrow: 1 }}>
-          <Typography gutterBottom variant="h5" component="div">
-            {contractData.fundName}
+          <Typography gutterBottom variant="h5" component="h2">
+            <Link
+              href={contractData.fundURL}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="none"
+              color="inherit"
+            >
+              {contractData.fundName}
+            </Link>
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
+          <Typography variant="body2" color="text.secondary">
             {contractData.fundDescription}
           </Typography>
-          <Typography variant="body2" color="text.primary" sx={{ mt: 1 }}>
-            Total Raised: ${totalDonations}
-          </Typography>
-          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-            Beneficiary: {`${contractData.fundBeneficiary.slice(0, 6)}...${contractData.fundBeneficiary.slice(-4)}`}
-          </Typography>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.primary" sx={{ fontWeight: 'bold' }}>
+              ${totalDonations} Raised
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Beneficiary: {contractData.fundBeneficiary.slice(0, 6)}...{contractData.fundBeneficiary.slice(-4)}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>
+                Contract: {fundraiser}
+              </Typography>
+              <Tooltip
+                open={copyTooltipOpen}
+                title="Copied!"
+                placement="top"
+                arrow
+                leaveDelay={1000} // Hide tooltip after 1s of mouse leave
+                onClose={() => setCopyTooltipOpen(false)}
+              >
+                <IconButton onClick={handleCopy} size="small">
+                  <ContentCopyIcon fontSize="inherit" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
         </CardContent>
-        <Stack spacing={1} sx={{ p: 2, mt: 'auto' }}>
-          <Button variant="contained" onClick={handleOpen}>
-            Donate Now
+        <Stack direction="row" spacing={1} sx={{ p: 2, borderTop: '1px solid #eee' }}>
+          <Button variant="contained" onClick={handleOpen} fullWidth>
+            Donate
           </Button>
-          <Link href={contractData.fundURL} target="_blank" rel="noopener" sx={{ textAlign: 'center' }}>
-            Learn More
-          </Link>
         </Stack>
       </Card>
     </>

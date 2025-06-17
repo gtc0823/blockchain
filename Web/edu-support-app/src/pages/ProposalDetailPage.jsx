@@ -17,6 +17,16 @@ import fundraiserContractABI from '../edu-support/abi/Fundraiser-abi.json';
 import eduDaoContractABI from '../edu-support/abi/EduDAO-abi.json';
 import eduDaoContractAddr from '../edu-support/abi/EduDAO-addr.json';
 
+const getStateName = (state) => {
+  switch (state) {
+    case '0': return 'Pending';
+    case '1': return 'Approved';
+    case '2': return 'Rejected';
+    case '3': return 'Executed';
+    default: return 'Unknown';
+  }
+};
+
 const ProposalDetailPage = () => {
   const navigate = useNavigate();
   const { contractAddress } = useParams();
@@ -170,11 +180,11 @@ const ProposalDetailPage = () => {
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
               <Chip 
-                label={`Status: ${proposalDetails.state}`} 
+                label={`Status: ${getStateName(proposalDetails.state)}`} 
                 color={
-                  proposalDetails.state === 'Pending' ? 'primary' :
-                  proposalDetails.state === 'Approved' ? 'success' :
-                  proposalDetails.state === 'Rejected' ? 'error' : 'default'
+                  proposalDetails.state === '0' ? 'primary' :
+                  proposalDetails.state === '1' ? 'success' :
+                  proposalDetails.state === '2' ? 'error' : 'default'
                 }
               />
               <Chip label={`For: ${proposalDetails.forVotes} ETH`} color="success" />
@@ -182,7 +192,7 @@ const ProposalDetailPage = () => {
               <Chip label={`Voting Ends: ${proposalDetails.votingEndTime}`} />
             </Stack>
 
-            {proposalDetails.state === 'Pending' && (
+            {proposalDetails.state === '0' && (
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                 <Button 
                   variant="contained" 
@@ -206,7 +216,7 @@ const ProposalDetailPage = () => {
               </Box>
             )}
 
-            {proposalDetails.state === 'Pending' && 
+            {proposalDetails.state === '0' && 
               new Date() > new Date(proposalDetails.votingEndTime) && (
                 <Button 
                   variant="contained" 

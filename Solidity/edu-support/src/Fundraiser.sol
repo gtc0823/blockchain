@@ -24,12 +24,16 @@ contract Fundraiser {
     uint256 public totalDonations;
     mapping(address => uint256) public myDonations;
 
+    bool public isDAOApproved;
+    address public daoAddress;
+
     // =============================================================
     // Events
     // =============================================================
 
     event DonationReceived(address indexed donor, uint256 amount);
     event Withdrawal(uint256 amount);
+    event DAOApprovalSet(bool status);
 
     // =============================================================
     // Modifiers
@@ -37,6 +41,11 @@ contract Fundraiser {
 
     modifier onlyOwner() {
         require(msg.sender == owner, "You are not the owner");
+        _;
+    }
+
+    modifier onlyDAO() {
+        require(msg.sender == daoAddress, "You are not the DAO");
         _;
     }
 
@@ -50,7 +59,8 @@ contract Fundraiser {
         string memory _imageURL,
         string memory _description,
         address _beneficiary,
-        address _owner
+        address _owner,
+        address _daoAddress
     ) {
         name = _name;
         url = _url;
@@ -58,10 +68,17 @@ contract Fundraiser {
         description = _description;
         beneficiary = payable(_beneficiary);
         owner = _owner;
+        daoAddress = _daoAddress;
+        isDAOApproved = false; // Default to not approved
     }
 
     function setBeneficiary(address payable _beneficiary) public onlyOwner {
         beneficiary = _beneficiary;
+    }
+
+    function setDAOApproval(bool _status) public onlyDAO {
+        isDAOApproved = _status;
+        emit DAOApprovalSet(_status);
     }
 
     function donate() public payable {

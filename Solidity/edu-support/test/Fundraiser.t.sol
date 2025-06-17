@@ -9,6 +9,7 @@ contract FundraiserTest is Test {
     address constant OWNER = address(0x1);
     address constant BENEFICIARY = address(0x2);
     address constant DONOR = address(0x3);
+    address constant DAO_ADDRESS = address(0x4);
 
     function setUp() public {
         fundraiser = new Fundraiser(
@@ -16,8 +17,9 @@ contract FundraiserTest is Test {
             "test.com",
             "image.com",
             "Test description",
-            BENEFICIARY,
-            OWNER
+            payable(BENEFICIARY),
+            OWNER,
+            DAO_ADDRESS
         );
     }
 
@@ -25,6 +27,8 @@ contract FundraiserTest is Test {
         assertEq(fundraiser.name(), "Test Fundraiser");
         assertEq(fundraiser.owner(), OWNER);
         assertEq(fundraiser.beneficiary(), BENEFICIARY);
+        assertEq(fundraiser.daoAddress(), DAO_ADDRESS);
+        assertFalse(fundraiser.isDAOApproved());
     }
 
     function test_SetBeneficiary() public {
@@ -36,7 +40,7 @@ contract FundraiserTest is Test {
 
     function test_FailSetBeneficiaryNotOwner() public {
         vm.prank(DONOR);
-        address newBeneficiary = address(0x4);
+        address newBeneficiary = address(0x5);
         vm.expectRevert("You are not the owner");
         fundraiser.setBeneficiary(payable(newBeneficiary));
     }
@@ -78,5 +82,17 @@ contract FundraiserTest is Test {
         vm.prank(DONOR);
         vm.expectRevert("You are not the owner");
         fundraiser.withdraw();
+    }
+
+    function test_DAO_SetApproval() public {
+        vm.prank(DAO_ADDRESS);
+        fundraiser.setDAOApproval(true);
+        assertTrue(fundraiser.isDAOApproved());
+    }
+
+    function test_Fail_DAO_SetApproval_NotDAO() public {
+        vm.prank(OWNER); // Try to set approval as owner, should fail
+        vm.expectRevert("You are not the DAO");
+        fundraiser.setDAOApproval(true);
     }
 } 

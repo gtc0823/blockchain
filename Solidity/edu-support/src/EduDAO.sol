@@ -1,108 +1,141 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {EduToken} from "./EduToken.sol";
 import {Fundraiser} from "./Fundraiser.sol";
 
 /**
- * @title EduDAO
- * @author Your Name
- * @notice A Decentralized Autonomous Organization for funding educational projects.
- * It manages proposals, voting, and execution based on the EduToken governance token.
+ * @title EduDAO (Simple)
+ * @notice A simplified DAO for educational project approvals, managed by members.
  */
 contract EduDAO {
-    // --- Events ---
-    event ProposalCreated(
-        uint256 proposalId,
-        address proposer,
-        address fundraiserContract,
-        string description
-    );
-    event Voted(uint256 proposalId, address voter, bool inFavor, uint256 weight);
+    // =============================================================
+    // State Variables
+    // =============================================================
 
-    // --- State Variables ---
-    EduToken public immutable token;
+    address public owner;
+    mapping(address => bool) public isMember;
     uint256 public nextProposalId;
+    uint256 public votingPeriod; // in seconds, e.g., 7 days
 
     struct Proposal {
         address proposer;
-        address fundraiserContract; // The fundraiser being proposed for funding
+        Fundraiser fundraiserContract; // The fundraiser being proposed for approval
         string description;
         uint256 creationTime;
         uint256 forVotes;
         uint256 againstVotes;
+        bool executed;
         mapping(address => bool) hasVoted;
     }
 
     mapping(uint256 => Proposal) public proposals;
 
-    // --- Modifiers ---
-    modifier proposalExists(uint256 _proposalId) {
-        require(
-            proposals[_proposalId].proposer != address(0),
-            "Proposal does not exist"
-        );
+    // =============================================================
+    // Events
+    // =============================================================
+    event MemberAdded(address indexed member);
+    event MemberRemoved(address indexed member);
+    event ProposalCreated(uint256 indexed proposalId, address indexed proposer, address indexed fundraiserContract);
+    event Voted(uint256 indexed proposalId, address indexed voter, bool inFavor);
+    event ProposalExecuted(uint256 indexed proposalId, bool passed);
+
+    // =============================================================
+    // Modifiers
+    // =============================================================
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
         _;
     }
 
-    // --- Functions ---
-    constructor(address _tokenAddress) {
-        token = EduToken(_tokenAddress);
+    modifier onlyMember() {
+        require(isMember[msg.sender], "Only members can call this function");
+        _;
+    }
+    
+    // =============================================================
+    // Functions
+    // =============================================================
+
+    constructor() {
+        owner = msg.sender;
+        isMember[msg.sender] = true; // The deployer is the first member
+        votingPeriod = 7 days; // Set a default 7-day voting period
+        emit MemberAdded(msg.sender);
     }
 
-    /**
-     * @notice Creates a new proposal to fund a fundraiser.
-     * @param _fundraiserContract The address of the fundraiser contract.
-     * @param _description A description of the proposal.
-     */
-    function createProposal(
-        address _fundraiserContract,
-        string memory _description
-    ) public {
-        require(
-            _fundraiserContract != address(0),
-            "Invalid fundraiser contract address"
-        );
+    function addMember(address _newMember) public onlyOwner {
+        require(_newMember != address(0), "Invalid address");
+        require(!isMember[_newMember], "Address is already a member");
+        isMember[_newMember] = true;
+        emit MemberAdded(_newMember);
+    }
+
+    function removeMember(address _member) public onlyOwner {
+        require(isMember[_member], "Address is not a member");
+        isMember[_member] = false;
+        emit MemberRemoved(_member);
+    }
+
+    function createProposal(address payable _fundraiserAddress, string memory _description) public onlyMember {
+        require(_fundraiserAddress != address(0), "Invalid fundraiser address");
+        
         uint256 proposalId = nextProposalId++;
         Proposal storage p = proposals[proposalId];
-
+        
         p.proposer = msg.sender;
-        p.fundraiserContract = _fundraiserContract;
+        p.fundraiserContract = Fundraiser(_fundraiserAddress);
         p.description = _description;
         p.creationTime = block.timestamp;
-        // forVotes and againstVotes are already 0 by default
-
-        emit ProposalCreated(
-            proposalId,
-            msg.sender,
-            _fundraiserContract,
-            _description
-        );
+        
+        emit ProposalCreated(proposalId, msg.sender, _fundraiserAddress);
     }
 
-    /**
-     * @notice Cast a vote on a proposal.
-     * @param _proposalId The ID of the proposal to vote on.
-     * @param _inFavor True for a 'for' vote, false for an 'against' vote.
-     */
-    function vote(uint256 _proposalId, bool _inFavor)
-        public
-        proposalExists(_proposalId)
-    {
+    function vote(uint256 _proposalId, bool _inFavor) public onlyMember {
         Proposal storage p = proposals[_proposalId];
-        require(!p.hasVoted[msg.sender], "Already voted");
-
-        uint256 votingPower = token.balanceOf(msg.sender);
-        require(votingPower > 0, "No voting power");
-
+        
+        require(p.proposer != address(0), "Proposal does not exist");
+        require(!p.hasVoted[msg.sender], "You have already voted");
+        require(block.timestamp < p.creationTime + votingPeriod, "Voting period has ended");
+        
         p.hasVoted[msg.sender] = true;
-
+        
         if (_inFavor) {
-            p.forVotes += votingPower;
+            p.forVotes++;
         } else {
-            p.againstVotes += votingPower;
+            p.againstVotes++;
         }
+        
+        emit Voted(_proposalId, msg.sender, _inFavor);
+    }
 
-        emit Voted(_proposalId, msg.sender, _inFavor, votingPower);
+    function executeProposal(uint256 _proposalId) public onlyOwner {
+        Proposal storage p = proposals[_proposalId];
+
+        require(p.proposer != address(0), "Proposal does not exist");
+        require(!p.executed, "Proposal has already been executed");
+        require(block.timestamp >= p.creationTime + votingPeriod, "Voting period has not yet ended");
+        
+        p.executed = true;
+        
+        if (p.forVotes > p.againstVotes) {
+            p.fundraiserContract.setDAOApproval(true);
+            emit ProposalExecuted(_proposalId, true);
+        } else {
+            emit ProposalExecuted(_proposalId, false);
+        }
+    }
+
+    function getProposal(uint256 _proposalId) public view returns (address, address, string memory, uint256, uint256, uint256, bool) {
+        Proposal storage p = proposals[_proposalId];
+        return (
+            p.proposer,
+            address(p.fundraiserContract),
+            p.description,
+            p.creationTime,
+            p.forVotes,
+            p.againstVotes,
+            p.executed
+        );
     }
 } 

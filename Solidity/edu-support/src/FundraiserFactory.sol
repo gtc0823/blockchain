@@ -32,9 +32,6 @@ contract FundraiserFactory {
      * @param _imageURL An image representing the campaign
      * @param _description A short description of the campaign
      * @param _beneficiary The address that will receive withdrawn donations
-     *
-     * Only addresses marked as `payable` are allowed to receive ETH,
-     * so the beneficiary must be declared payable.
      */
     function createFundraiser(
         string memory _name,
@@ -56,7 +53,14 @@ contract FundraiserFactory {
         emit FundraiserCreated(address(newFundraiser), msg.sender);
     }
 
-    function getAllFundraisers() public view returns (Fundraiser[] memory) {
-        return fundraisers;
+    /**
+     * @dev Returns the addresses of all created Fundraiser contracts.
+     */
+    function getAllFundraisers() public view returns (address[] memory) {
+        address[] memory addresses = new address[](fundraisers.length);
+        for (uint256 i = 0; i < fundraisers.length; i++) {
+            addresses[i] = address(fundraisers[i]);
+        }
+        return addresses;
     }
 }

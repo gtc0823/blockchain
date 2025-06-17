@@ -24,13 +24,13 @@ contract FundraiserFactoryTest is Test {
         );
 
         assertEq(factory.fundraisersCount(), 1);
-        
-        Fundraiser[] memory fundraisers = factory.getAllFundraisers();
-        assertEq(fundraisers.length, 1);
 
-        Fundraiser createdFundraiser = fundraisers[0];
-        assertEq(createdFundraiser.name(), "Test Fundraiser");
-        assertEq(createdFundraiser.owner(), OWNER);
+        address[] memory fundraiserAddrs = factory.getAllFundraisers();
+        assertEq(fundraiserAddrs.length, 1);
+
+        Fundraiser fundraiser = Fundraiser(payable(fundraiserAddrs[0]));
+        assertEq(fundraiser.name(), "Test Fundraiser");
+        assertEq(fundraiser.owner(), OWNER);
     }
 
     function test_GetAllFundraisers() public {
@@ -41,10 +41,13 @@ contract FundraiserFactoryTest is Test {
         vm.prank(ANOTHER_OWNER);
         factory.createFundraiser("Fundraiser 2", "", "", "", ANOTHER_OWNER);
 
-        Fundraiser[] memory fundraisers = factory.getAllFundraisers();
-        assertEq(fundraisers.length, 2);
+        address[] memory fundraiserAddrs = factory.getAllFundraisers();
+        assertEq(fundraiserAddrs.length, 2);
 
-        assertEq(fundraisers[0].name(), "Fundraiser 1");
-        assertEq(fundraisers[1].name(), "Fundraiser 2");
+        Fundraiser fundraiser1 = Fundraiser(payable(fundraiserAddrs[0]));
+        Fundraiser fundraiser2 = Fundraiser(payable(fundraiserAddrs[1]));
+
+        assertEq(fundraiser1.name(), "Fundraiser 1");
+        assertEq(fundraiser2.name(), "Fundraiser 2");
     }
-} 
+}

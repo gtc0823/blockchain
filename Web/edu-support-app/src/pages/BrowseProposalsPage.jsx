@@ -28,6 +28,7 @@ const BrowseProposalsPage = () => {
           fundraiserFactoryContractAddr.address
         );
         const newFunds = await instance.methods.getAllFundraisers().call();
+        console.log('Fundraiser addresses:', newFunds);
         setFunds(newFunds);
       } catch (error) {
         console.error(error);

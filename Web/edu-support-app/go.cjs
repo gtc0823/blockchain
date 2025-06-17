@@ -2,43 +2,41 @@ const fs = require('fs');
 const path = require('path');
 
 function saveAbiAndAddress(contractName, outDir, broadcastDir) {
-  const abi = require(path.join(outDir, `${contractName}.sol`, `${contractName}.json`)).abi;
+  const abiPath = path.join(outDir, `${contractName}.sol`, `${contractName}.json`);
+  const broadcastPath = path.join(broadcastDir, '31337', 'run-latest.json');
+
+  const abi = require(abiPath).abi;
   console.log(`${contractName} ABI loaded successfully`);
 
-  const deployment = require(path.join(broadcastDir, '31337', 'run-latest.json'));
-
-  // 🔧 精準對應 contractName
+  const deployment = require(broadcastPath);
   const tx = deployment.transactions.find(tx => tx.contractName === contractName);
   if (!tx) {
     throw new Error(`Contract ${contractName} not found in broadcast log`);
   }
+
   const address = tx.contractAddress;
   console.log(`${contractName} address:`, address);
 
-  fs.writeFileSync(
-    path.join(__dirname, `./src/edu-support/abi/${contractName}-abi.json`),
-    JSON.stringify(abi, null, 2)
-  );
+  const abiOutputPath = path.join(__dirname, `./src/edu-support/abi/${contractName}-abi.json`);
+  const addrOutputPath = path.join(__dirname, `./src/edu-support/abi/${contractName}-addr.json`);
 
-  fs.writeFileSync(
-    path.join(__dirname, `./src/edu-support/abi/${contractName}-addr.json`),
-    JSON.stringify({ address }, null, 2)
-  );
+  fs.writeFileSync(abiOutputPath, JSON.stringify(abi, null, 2));
+  fs.writeFileSync(addrOutputPath, JSON.stringify({ address }, null, 2));
 }
 
+// ✅ 請根據實際路徑調整這裡
+const outDir = 'C:/Users/Administrator/Desktop/block/blockchain/Solidity/edu-support/out';
+const broadcastDir = 'C:/Users/Administrator/Desktop/block/blockchain/Solidity/edu-support/broadcast/DeployAll.s.sol';
 
-// 請根據你實際的路徑調整
-const outDir = 'C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/out';
-const broadcastDirEduDAO = 'C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/broadcast/DeployEduDAO.s.sol';
-const broadcastDirFundraiserFactory = 'C:/Users/Administrator/Desktop/blockchain/blockchain/Solidity/edu-support/broadcast/FundraiserFactory.s.sol';
+// 針對三個主要合約保存 ABI 和地址
+saveAbiAndAddress('EduToken', outDir, broadcastDir);
+saveAbiAndAddress('FundraiserFactory', outDir, broadcastDir);
+saveAbiAndAddress('EduDAO', outDir, broadcastDir);
 
-// 針對不同合約及部署路徑呼叫
-saveAbiAndAddress('EduDAO', outDir, broadcastDirEduDAO);
-saveAbiAndAddress('EduToken', outDir, broadcastDirEduDAO);
-saveAbiAndAddress('FundraiserFactory', outDir, broadcastDirFundraiserFactory);
-
+// 👉 額外保存 Fundraiser（只是 ABI，無部署）
 try {
-  const abi = require(path.join(outDir, 'Fundraiser.sol', 'Fundraiser.json')).abi;
+  const fundraiserAbiPath = path.join(outDir, 'Fundraiser.sol', 'Fundraiser.json');
+  const abi = require(fundraiserAbiPath).abi;
   console.log('Fundraiser ABI loaded successfully');
   fs.writeFileSync(
     path.join(__dirname, './src/edu-support/abi/Fundraiser-abi.json'),

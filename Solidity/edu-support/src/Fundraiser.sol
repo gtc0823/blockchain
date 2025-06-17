@@ -83,12 +83,21 @@ contract Fundraiser {
 
     function donate() public payable {
         require(msg.value > 0, "Donation must be greater than 0");
+        
+        // Directly send the funds to the beneficiary
+        (bool sent, ) = beneficiary.call{value: msg.value}("");
+        require(sent, "Failed to send funds to beneficiary");
+
         myDonations[msg.sender] += msg.value;
         totalDonations += msg.value;
         emit DonationReceived(msg.sender, msg.value);
     }
 
     function withdraw() public onlyOwner {
+        // This function is now effectively disabled because funds are sent directly.
+        // We leave it here to avoid breaking frontend calls, but it will do nothing.
+        revert("Withdrawal is disabled; funds are sent directly to beneficiary.");
+        /*
         uint256 balance = address(this).balance;
         require(balance > 0, "No funds to withdraw");
 
@@ -96,6 +105,7 @@ contract Fundraiser {
         require(sent, "Withdrawal failed");
         
         emit Withdrawal(balance);
+        */
     }
 
     /**

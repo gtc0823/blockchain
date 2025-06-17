@@ -1,7 +1,7 @@
 // FundraiserCard.jsx - Displays a fundraising campaign card with donation, withdrawal, and beneficiary features
 
 import { ethers } from 'ethers'; // Use ethers instead of Web3
-import cc from 'cryptocompare';
+// import cc from 'cryptocompare'; // No longer needed
 import { useState, useEffect } from 'react';
 
 import Box from '@mui/material/Box';
@@ -46,17 +46,21 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
     fundTotalDonationsWei: 0n, // Use BigInt for ethers v6
   });
 
+  const [totalDonationsUSD, setTotalDonationsUSD] = useState('0.00');
+  const [totalDonationsETH, setTotalDonationsETH] = useState('0');
   const [myTotalDonation, setMyTotalDonation] = useState(0n);
-  const [totalDonations, setTotalDonations] = useState(0);
   const [donationAmount, setDonationAmount] = useState('');
-  const [exchangeRate, setExchangeRate] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
   const [open, setOpen] = useState(false);
+  
+  // Use a fixed exchange rate for demonstration purposes
+  const exchangeRate = 3000; 
 
   // Convert USD donation amount to ETH using exchange rate
   const ethAmount = (donationAmount / exchangeRate || 0).toFixed(4);
 
   const init = async () => {
+    console.log(`[FundraiserCard init for ${fundraiser}]`); // Log which card is initializing
     try {
       let provider;
       let signer;
@@ -74,6 +78,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
 
       setContract(fundraiserContract);
 
+      console.log(`[FundraiserCard for ${fundraiser}] Fetching contract data...`);
       // Load contract metadata
       const [
         fundName,
@@ -93,6 +98,11 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
         fundraiserContract.isDAOApproved(),
       ]);
 
+      console.log(`[FundraiserCard for ${fundraiser}] Fetched contract data:`, { fundName, fundBeneficiary, daoApprovalStatus });
+      
+      const ethDonated = ethers.formatEther(fundTotalDonationsWei);
+      setTotalDonationsETH(ethDonated);
+      
       setContractData({
         fundName,
         fundURL,
@@ -103,17 +113,12 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
       });
       setIsDAOApproved(daoApprovalStatus);
 
-      try {
-        const prices = await cc.price('ETH', ['USD']); // Fetch the current exchange rate of ETH to USD
-        setExchangeRate(prices.USD);
-        // Use ethers.formatEther for BigInt
-        const eth = ethers.formatEther(fundTotalDonationsWei);
-        setTotalDonations((prices.USD * eth).toFixed(2));
-      } catch (error) {
-        console.error('Exchange rate fetch error:', error);
-      }
+      // Directly use the fixed exchange rate for calculation
+      const fallbackRate = 3000;
+      setTotalDonationsUSD((fallbackRate * parseFloat(ethDonated)).toFixed(2));
 
       if (connectedAccount) {
+        console.log(`[FundraiserCard for ${fundraiser}] Fetching user-specific data for ${connectedAccount}`);
         // Correctly fetch the total donation for the connected account
         const myDonationWei = await fundraiserContract.myDonations(connectedAccount);
         setMyTotalDonation(myDonationWei);
@@ -122,7 +127,7 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
         setIsOwner(owner.toLowerCase() === connectedAccount.toLowerCase());
       }
     } catch (error) {
-      console.error(error);
+      console.error(`[FundraiserCard for ${fundraiser}] A critical error occurred during initialization:`, error);
       // alert('Failed to initialise Web3 or contract');
     }
   };
@@ -138,24 +143,55 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
 
   // Handle donation transaction
   const donateFunds = async () => {
+    console.log(`[FundraiserCard for ${fundraiser}] Attempting to donate...`);
+
     if (!contract || !connectedAccount) {
+      console.error("[Donation Error] Contract or wallet not connected.");
       alert("Please connect your wallet to donate.");
       return;
     }
+
+    if (!donationAmount || parseFloat(donationAmount) <= 0) {
+      console.error("[Donation Error] Invalid donation amount:", donationAmount);
+      alert("Please enter a valid donation amount.");
+      return;
+    }
+
+    // Since cryptocompare can fail, use a fallback exchange rate for demonstration.
+    const currentExchangeRate = 3000; // Use fixed rate
+
     try {
-      const ethTotal = parseFloat(donationAmount) / exchangeRate;
-      // Use ethers.parseEther for BigInt conversion
-      const donation = ethers.parseEther(ethTotal.toString());
+      const ethTotal = parseFloat(donationAmount) / currentExchangeRate;
+      const donationInWei = ethers.parseEther(ethTotal.toString());
 
-      const tx = await contract.donate({ value: donation });
-      await tx.wait(); // Wait for transaction to be mined
+      console.log("[Donation Info]", {
+        usdAmount: donationAmount,
+        exchangeRate: currentExchangeRate,
+        ethCalculated: ethTotal,
+        donationInWei: donationInWei.toString(),
+      });
 
+      if (donationInWei <= 0n) {
+        console.error("[Donation Error] Calculated donation amount is too small.");
+        alert("Donation amount is too small.");
+        return;
+      }
+
+      console.log("[Donation] Sending transaction to contract...");
+      const tx = await contract.donate({ value: donationInWei });
+      console.log("[Donation] Transaction sent, waiting for confirmation:", tx.hash);
+
+      await tx.wait();
+
+      console.log("[Donation] Transaction confirmed!");
       alert('Donation successful');
       setOpen(false);
       init(); // Refresh data after donation
     } catch (error) {
-      console.error('Donation failed:', error);
-      alert(error.reason || 'Donation failed');
+      console.error('[Donation Failed] Full error object:', error);
+      // Provide a more detailed error message from ethers.js if available
+      const reason = error.reason || error.data?.message || error.message || "An unknown error occurred.";
+      alert(`Donation failed: ${reason}`);
     }
   };
 
@@ -189,12 +225,12 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
 
   // Render list of user's past donations
   const renderMyDonation = () => {
-    if (!connectedAccount || !exchangeRate || myTotalDonation === 0n) {
+    if (!connectedAccount || myTotalDonation === 0n) {
       return null;
     }
 
     const eth = ethers.formatEther(myTotalDonation);
-    const usd = (exchangeRate * eth).toFixed(2);
+    const usd = (exchangeRate * parseFloat(eth)).toFixed(2);
     
     return (
       <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
@@ -285,9 +321,9 @@ const FundraiserCard = ({ fundraiser, connectedAccount }) => {
           </Typography>
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.primary" sx={{ fontWeight: 'bold' }}>
-              ${totalDonations} Raised
+              ${totalDonationsUSD} Raised
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{mt: 1}}>
               Beneficiary: {contractData.fundBeneficiary.slice(0, 6)}...{contractData.fundBeneficiary.slice(-4)}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>

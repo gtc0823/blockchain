@@ -8,9 +8,14 @@ import {Fundraiser} from "../src/Fundraiser.sol";
 contract FundraiserFactoryTest is Test {
     FundraiserFactory factory;
     address constant OWNER = address(0x1);
+    address constant DAO_ADDRESS = address(0x1337);
 
     function setUp() public {
-        factory = new FundraiserFactory();
+        factory = new FundraiserFactory(DAO_ADDRESS);
+    }
+
+    function test_InitialState() public view {
+        assertEq(factory.daoAddress(), DAO_ADDRESS);
     }
 
     function test_CreateFundraiser() public {
@@ -31,6 +36,7 @@ contract FundraiserFactoryTest is Test {
         Fundraiser createdFundraiser = fundraisers[0];
         assertEq(createdFundraiser.name(), "Test Fundraiser");
         assertEq(createdFundraiser.owner(), OWNER);
+        assertEq(createdFundraiser.daoAddress(), DAO_ADDRESS);
     }
 
     function test_GetAllFundraisers() public {

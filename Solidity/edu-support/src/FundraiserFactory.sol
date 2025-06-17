@@ -14,6 +14,7 @@ contract FundraiserFactory {
 
     Fundraiser[] public fundraisers;
     uint256 public fundraisersCount;
+    address public daoAddress;
 
     // =============================================================
     // Events
@@ -24,6 +25,10 @@ contract FundraiserFactory {
     // =============================================================
     // Functions
     // =============================================================
+
+    constructor(address _daoAddress) {
+        daoAddress = _daoAddress;
+    }
 
     /**
      * @dev Creates a new Fundraiser contract and stores it.
@@ -49,7 +54,8 @@ contract FundraiserFactory {
             _imageURL,
             _description,
             _beneficiary,
-            msg.sender
+            msg.sender,
+            daoAddress
         );
         fundraisers.push(newFundraiser);
         fundraisersCount++;

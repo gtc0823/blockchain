@@ -3,94 +3,153 @@ pragma solidity ^0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
 import {EduDAO} from "../src/EduDAO.sol";
-import {EduToken} from "../src/EduToken.sol";
 import {Fundraiser} from "../src/Fundraiser.sol";
 
 contract EduDAOTest is Test {
     EduDAO public dao;
-    EduToken public token;
     Fundraiser public fundraiser;
 
-    address public owner = address(0x123);
-    address public voter1 = address(0x456);
-    address public voter2 = address(0x789);
-    address public proposer = address(0xABC);
+    address public owner;
+    address public member1;
+    address public member2;
+    address public nonMember;
+    address public fundraiserOwner;
 
     function setUp() public {
-        // Deploy Token and DAO
-        vm.prank(owner);
-        token = new EduToken("EduToken", "EDU");
-        dao = new EduDAO(address(token));
+        // Use default foundry addresses for clarity
+        owner = makeAddr("owner");
+        member1 = makeAddr("member1");
+        member2 = makeAddr("member2");
+        nonMember = makeAddr("nonMember");
+        fundraiserOwner = makeAddr("fundraiserOwner");
 
-        // Deploy a dummy Fundraiser contract
+        // Deploy DAO with 'owner' as the deployer
+        vm.prank(owner);
+        dao = new EduDAO();
+
+        // Deploy a Fundraiser contract
         fundraiser = new Fundraiser(
             "Test Project",
             "http://test.com",
             "http://image.com",
             "A test fundraiser",
-            proposer, // beneficiary
-            owner     // owner
+            payable(fundraiserOwner), // beneficiary
+            fundraiserOwner,          // owner
+            address(dao)              // daoAddress
         );
 
-        // Mint some tokens to voters
+        // Add member1 and member2 to the DAO
         vm.prank(owner);
-        token.mint(voter1, 100 ether);
+        dao.addMember(member1);
         vm.prank(owner);
-        token.mint(voter2, 50 ether);
+        dao.addMember(member2);
     }
 
-    function test_CreateProposal() public {
-        vm.prank(proposer);
-        dao.createProposal(address(fundraiser), "Fund Test Project");
-
-        (address p_proposer, address p_fundraiserContract, string memory p_description, ,,) = dao.proposals(0);
-        assertEq(p_proposer, proposer);
-        assertEq(p_fundraiserContract, address(fundraiser));
-        assertEq(p_description, "Fund Test Project");
+    function test_InitialState() public view {
+        assertTrue(dao.isMember(owner));
+        assertEq(dao.owner(), owner);
     }
 
-    function test_Vote() public {
-        // Create a proposal first
-        vm.prank(proposer);
-        dao.createProposal(address(fundraiser), "Fund Test Project");
+    function test_AddAndRemoveMembers() public {
+        // Owner adds a new member
+        vm.prank(owner);
+        dao.addMember(nonMember);
+        assertTrue(dao.isMember(nonMember));
 
-        // Voter 1 votes 'for'
-        vm.prank(voter1);
+        // Owner removes a member
+        vm.prank(owner);
+        dao.removeMember(member1);
+        assertFalse(dao.isMember(member1));
+    }
+    
+    function test_Fail_NonOwnerCannotManageMembers() public {
+        vm.prank(nonMember);
+        vm.expectRevert("Only owner can call this function");
+        dao.addMember(makeAddr("anotherUser"));
+
+        vm.prank(member1);
+        vm.expectRevert("Only owner can call this function");
+        dao.removeMember(member2);
+    }
+
+    function test_MemberCanCreateProposal() public {
+        vm.prank(member1);
+        dao.createProposal(payable(address(fundraiser)), "Fund Test Project");
+        
+        (address proposer, address fContract,,,,,) = dao.getProposal(0);
+        assertEq(proposer, member1);
+        assertEq(fContract, address(fundraiser));
+    }
+
+    function test_Fail_NonMemberCannotCreateProposal() public {
+        vm.prank(nonMember);
+        vm.expectRevert("Only members can call this function");
+        dao.createProposal(payable(address(fundraiser)), "Should Fail");
+    }
+
+    function test_MembersCanVote() public {
+        // member1 creates a proposal
+        vm.prank(member1);
+        dao.createProposal(payable(address(fundraiser)), "Fund Test Project");
+
+        // member1 votes 'for'
+        vm.prank(member1);
         dao.vote(0, true);
 
-        // Voter 2 votes 'against'
-        vm.prank(voter2);
+        // member2 votes 'against'
+        vm.prank(member2);
+        dao.vote(0, false);
+        
+        // owner (also a member) votes 'for'
+        vm.prank(owner);
+        dao.vote(0, true);
+
+        (,,,,uint256 forVotes, uint256 againstVotes,) = dao.getProposal(0);
+        assertEq(forVotes, 2);
+        assertEq(againstVotes, 1);
+    }
+
+    function test_Fail_CannotVoteTwice() public {
+        vm.prank(member1);
+        dao.createProposal(payable(address(fundraiser)), "Fund Test Project");
+
+        vm.prank(member1);
+        dao.vote(0, true);
+
+        vm.prank(member1);
+        vm.expectRevert("You have already voted");
+        dao.vote(0, false);
+    }
+
+    function test_ExecuteProposal_Success() public {
+        vm.prank(member1);
+        dao.createProposal(payable(address(fundraiser)), "Fund Test Project");
+
+        vm.prank(member1);
+        dao.vote(0, true);
+        vm.prank(owner);
+        dao.vote(0, true);
+        vm.prank(member2);
         dao.vote(0, false);
 
-        (,,, , uint256 p_forVotes, uint256 p_againstVotes) = dao.proposals(0);
-        assertEq(p_forVotes, 100 ether);
-        assertEq(p_againstVotes, 50 ether);
+        // Skip forward in time past the voting period (default is 7 days)
+        vm.warp(block.timestamp + 8 days);
+
+        vm.prank(owner);
+        dao.executeProposal(0);
+
+        assertTrue(fundraiser.isDAOApproved());
     }
 
-    function test_Fail_Vote_NoPower() public {
-        vm.prank(proposer);
-        dao.createProposal(address(fundraiser), "Fund Test Project");
+    function test_Fail_ExecuteProposal_TooEarly() public {
+        vm.prank(member1);
+        dao.createProposal(payable(address(fundraiser)), "Fund Test Project");
 
-        vm.prank(proposer); // Proposer has no tokens
-        vm.expectRevert("No voting power");
-        dao.vote(0, true);
-    }
+        // Skip forward, but not enough
+        vm.warp(block.timestamp + 1 days);
 
-    function test_Fail_Vote_Twice() public {
-        vm.prank(proposer);
-        dao.createProposal(address(fundraiser), "Fund Test Project");
-
-        vm.prank(voter1);
-        dao.vote(0, true);
-
-        vm.prank(voter1); // Voter 1 tries to vote again
-        vm.expectRevert("Already voted");
-        dao.vote(0, false);
-    }
-
-    function test_Fail_Vote_NonExistentProposal() public {
-        vm.prank(voter1);
-        vm.expectRevert("Proposal does not exist");
-        dao.vote(999, true); // Vote on a proposal that doesn't exist
+        vm.prank(owner);
+        vm.expectRevert("Voting period has not yet ended");
+        dao.executeProposal(0);
     }
 } 

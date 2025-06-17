@@ -46,7 +46,7 @@ const BrowseProposalsPage = () => {
         <Grid container spacing={2} justifyContent="center">
           {funds.map((fundraiser) => (
             <Grid
-              item // Use item prop for Grid container
+              item
               xs={12}
               sm={6}
               md={4}

@@ -24,12 +24,16 @@ contract Fundraiser {
     uint256 public totalDonations;
     mapping(address => uint256) public myDonations;
 
+    bool public isDAOApproved;
+    address public daoAddress;
+
     // =============================================================
     // Events
     // =============================================================
 
     event DonationReceived(address indexed donor, uint256 amount);
     event Withdrawal(uint256 amount);
+    event DAOApprovalSet(bool status);
 
     // =============================================================
     // Modifiers
@@ -37,6 +41,11 @@ contract Fundraiser {
 
     modifier onlyOwner() {
         require(msg.sender == owner, "You are not the owner");
+        _;
+    }
+
+    modifier onlyDAO() {
+        require(msg.sender == daoAddress, "You are not the DAO");
         _;
     }
 
@@ -50,7 +59,8 @@ contract Fundraiser {
         string memory _imageURL,
         string memory _description,
         address _beneficiary,
-        address _owner
+        address _owner,
+        address _daoAddress
     ) {
         name = _name;
         url = _url;
@@ -58,20 +68,36 @@ contract Fundraiser {
         description = _description;
         beneficiary = payable(_beneficiary);
         owner = _owner;
+        daoAddress = _daoAddress;
+        isDAOApproved = false; // Default to not approved
     }
 
     function setBeneficiary(address payable _beneficiary) public onlyOwner {
         beneficiary = _beneficiary;
     }
 
+    function setDAOApproval(bool _status) public onlyDAO {
+        isDAOApproved = _status;
+        emit DAOApprovalSet(_status);
+    }
+
     function donate() public payable {
         require(msg.value > 0, "Donation must be greater than 0");
+        
+        // Directly send the funds to the beneficiary
+        (bool sent, ) = beneficiary.call{value: msg.value}("");
+        require(sent, "Failed to send funds to beneficiary");
+
         myDonations[msg.sender] += msg.value;
         totalDonations += msg.value;
         emit DonationReceived(msg.sender, msg.value);
     }
 
     function withdraw() public onlyOwner {
+        // This function is now effectively disabled because funds are sent directly.
+        // We leave it here to avoid breaking frontend calls, but it will do nothing.
+        revert("Withdrawal is disabled; funds are sent directly to beneficiary.");
+        /*
         uint256 balance = address(this).balance;
         require(balance > 0, "No funds to withdraw");
 
@@ -79,6 +105,7 @@ contract Fundraiser {
         require(sent, "Withdrawal failed");
         
         emit Withdrawal(balance);
+        */
     }
 
     /**
